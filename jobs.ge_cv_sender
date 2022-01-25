@@ -1,0 +1,95 @@
+import smtplib
+import time
+import requests
+from bs4 import BeautifulSoup as bs
+import re
+import csv
+from email.message import EmailMessage
+from pprint import pprint
+
+#todo GMAIL section
+GMAIL_SMPT = 
+GMAIL_PORT = 
+
+#TODO GMAIL section - email, email pass , email message text
+EMAIL_ADDRESS=" provide your email"
+EMAIL_PASS = "provide your email password"
+MSG_CONTENT= "provide text message"
+
+
+# resume should be in the same folder where code is
+MY_CV= "write your resume full name"
+
+sleep_counter = 0
+good_tittle = [""]
+
+
+# TODO RANGE OF PAFE WICH YOU WANT TO PARSE
+page_num = range(1,100)
+
+
+general_mail_list = "general_mail_list.csv"
+good_mail_list = "sended_mail_list.csv"
+empty_mail_list = "empty_mail_list.csv"
+bad_mail_list = "bad_mail_list.csv"
+
+TURN_ON_MAIL_SENDING = input("'on' or 'off' mail sending system?   ")  # if on mail will send. if off than nothing going happend
+for number in page_num:
+    url = requests.get(f'https://jobs.ge/?page={number}&q=&cid=&lid=1&jid=1')
+    soup = bs(url.content, "html.parser")
+    links_toJob = soup.find_all("a", class_ = "vip")
+    for jobs in links_toJob:
+        for tittle in good_tittle:
+            if tittle in jobs.text:
+                info_url = requests.get(f"https://jobs.ge/{jobs['href']}")
+                text_info = bs(info_url.content , "html.parser")
+                email = re.findall(r'[\w.+-]+@[\w-]+\.[\w.-]+', text_info.text)
+                job_info = (jobs.text , email , info_url.url)
+                if len(email) == 1:
+                    with open(general_mail_list, "a", encoding= "utf-8", newline="") as general_f:
+                        general_writer = csv.writer(general_f)
+                        general_writer.writerow(job_info)
+
+                if len(email) == 0:
+                    with open(empty_mail_list, "a", encoding= "utf-8", newline="") as empty_f:
+                        empty_writer = csv.writer(empty_f)
+                        empty_writer.writerow(job_info)
+                if TURN_ON_MAIL_SENDING == "on" or TURN_ON_MAIL_SENDING == "ON":
+                    msg = EmailMessage()
+                    msg["subject"] = f"{jobs.text}"
+                    msg["from"] = EMAIL_ADDRESS
+                    msg["to"] = email
+                    msg.set_content(MSG_CONTENT)
+
+                    with open(MY_CV, "rb") as f:
+                        file_data = f.read()
+                        file_n = f.name
+                        msg.add_attachment(file_data, maintype = "application", subtype="octet-stream", filename = file_n)
+
+                    try:
+                        server = smtplib.SMTP_SSL(GMAIL_SMPT, GMAIL_PORT)
+                        server.ehlo()
+                        server.login(EMAIL_ADDRESS , EMAIL_PASS)
+                        server.send_message(msg)
+                        server.close()
+                        print(f"Email was sent! To {jobs.text}  on {email} counter {sleep_counter}")
+                        sleep_counter += 1
+                        with open(good_mail_list , "a", newline="" , encoding="utf-8") as good_f:
+                            good_writer = csv.writer(good_f)
+                            good_writer.writerow(job_info)
+
+                    except:
+                        with open(bad_mail_list , "a", newline="" , encoding="utf-8") as bad_f:
+                            bad_writer = csv.writer(bad_f)
+                            bad_writer.writerow(job_info)
+                        print (f'Something went wrong... To {jobs.text}  on {email} counter {sleep_counter}')
+                        sleep_counter += 1
+
+                    if sleep_counter == 50:
+                        print("now sleeping time !!!")
+                        time.sleep(90)
+                        sleep_counter = 0
+                        print(sleep_counter)
+                else:
+                    print("you have turned off mail sending")
+
